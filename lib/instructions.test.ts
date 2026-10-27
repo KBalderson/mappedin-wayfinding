@@ -308,3 +308,121 @@ describe('sidesteps', () => {
 		expect(steps.slice(1).map(s => s.text)).toEqual(['Turn right at Toxik', 'Bear left']);
 	});
 });
+
+describe('folding short legs', () => {
+	const base = { originName: 'Parking Garage I', destinationName: 'Gap', landmarks, floorNames };
+
+	it('folds an escalator a few steps after a turn into that turn', () => {
+		const steps = buildSteps({
+			...base,
+			instructions: [
+				ins({ type: 'Departure' }),
+				ins({ type: 'Turn', bearing: 'Right', distance: 85, point: at(85) }),
+				ins({ type: 'TakeConnection', connectionType: 'escalator', direction: 'up', toFloorName: 'Upper Level', distance: 6, point: at(85, 6) }),
+				ins({ type: 'ExitConnection', connectionType: 'escalator', distance: 9, point: at(85, 6), floorId: L1 }),
+				ins({ type: 'Turn', bearing: 'Left', distance: 40, point: at(125, 6), floorId: L1 }),
+				ins({ type: 'Arrival', distance: 30, point: at(125, 36), floorId: L1 }),
+			],
+		});
+		expect(steps.map(s => s.text)).toEqual([
+			'Start at Parking Garage I and head toward Zara',
+			'Turn right at Zara, then take the escalator up to Upper Level',
+			'Step off on Upper Level',
+			'Turn left',
+			'Gap is straight ahead',
+		]);
+		// The step keeps the icon of what to do first; the preview reads the floor change from `via`.
+		expect(steps[1].icon).toBe('right');
+		expect(steps[1].via).toBe('the escalator up to Upper Level');
+	});
+
+	it('folds a turn a few steps after stepping off into the step-off', () => {
+		const steps = buildSteps({
+			...base,
+			instructions: [
+				ins({ type: 'Departure' }),
+				ins({ type: 'TakeConnection', connectionType: 'elevator', direction: 'up', toFloorName: 'Upper Level', distance: 40, point: at(40) }),
+				ins({ type: 'ExitConnection', connectionType: 'elevator', distance: 9, point: at(80), floorId: L1 }),
+				ins({ type: 'Turn', bearing: 'Left', distance: 5, point: at(85), floorId: L1 }),
+				ins({ type: 'Arrival', distance: 30, point: at(85, -30), floorId: L1 }),
+			],
+		});
+		expect(steps.map(s => s.text)).toEqual([
+			'Start at Parking Garage I',
+			'Take the elevator up to Upper Level',
+			'Step off on Upper Level and turn left at Sephora',
+			'Gap is straight ahead',
+		]);
+		expect(steps[1].via).toBe('the elevator up to Upper Level');
+		expect(steps[2].icon).toBe('exit');
+		expect(steps[2].landmark?.name).toBe('Sephora');
+	});
+
+	it('says the destination on the last turn when it is a few steps away', () => {
+		const steps = buildSteps({
+			...base,
+			instructions: [
+				ins({ type: 'Departure' }),
+				ins({ type: 'Turn', bearing: 'Left', distance: 85, point: at(85) }),
+				ins({ type: 'Arrival', distance: 5, point: at(85, -5) }),
+			],
+		});
+		expect(steps.map(s => s.text)).toEqual(['Start at Parking Garage I and head toward Zara', 'Turn left at Zara. Gap is straight ahead']);
+		expect(steps[1].icon).toBe('left');
+		expect(steps[1].lead).toBe('In 85 m');
+		expect(steps[1].instructionIndex).toBe(2);
+	});
+
+	it('does not double the punctuation when the landmark name ends in "!"', () => {
+		const steps = buildSteps({
+			...base,
+			landmarks: [{ name: 'WATCH IT!', floorId: L0, ...at(85, 3) }],
+			instructions: [
+				ins({ type: 'Departure' }),
+				ins({ type: 'Turn', bearing: 'Left', distance: 85, point: at(85) }),
+				ins({ type: 'Arrival', distance: 5, point: at(85, -5) }),
+			],
+		});
+		expect(steps[1].text).toBe('Turn left at WATCH IT! Gap is straight ahead');
+	});
+
+	it('keeps the arrival separate from the start step', () => {
+		const steps = buildSteps({
+			...base,
+			instructions: [ins({ type: 'Departure' }), ins({ type: 'Arrival', distance: 5, point: at(5) })],
+		});
+		expect(steps.map(s => s.text)).toEqual(['Start at Parking Garage I', 'Gap is straight ahead']);
+	});
+
+	it('names two same-way turns a few steps apart as a U-turn', () => {
+		const steps = buildSteps({
+			...base,
+			instructions: [
+				ins({ type: 'Departure' }),
+				ins({ type: 'Turn', bearing: 'Left', distance: 85, point: at(85) }),
+				ins({ type: 'Turn', bearing: 'Left', distance: 6, point: at(85, -6) }),
+				ins({ type: 'Arrival', distance: 40, point: at(45, -6) }),
+			],
+		});
+		expect(steps[1].text).toBe('Make a U-turn at Zara');
+		expect(steps[1].icon).toBe('back');
+	});
+
+	it('detects a U-turn from the walking headings when the path is known', () => {
+		// North, a 6 m jog east, then back south: two rights that reverse the heading.
+		const path = [at(0), at(40), at(80), at(80, 6), at(60, 6), at(20, 6)].map(p => ({ ...p, floorId: L0 }));
+		const steps = buildSteps({
+			...base,
+			instructions: withHeadings(
+				[
+					ins({ type: 'Departure' }),
+					ins({ type: 'Turn', bearing: 'Right', distance: 80, point: at(80) }),
+					ins({ type: 'Turn', bearing: 'Right', distance: 6, point: at(80, 6) }),
+					ins({ type: 'Arrival', distance: 60, point: at(20, 6) }),
+				],
+				path,
+			),
+		});
+		expect(steps.slice(1).map(s => s.text)).toEqual(['Make a U-turn at Zara', 'Gap is straight ahead']);
+	});
+});

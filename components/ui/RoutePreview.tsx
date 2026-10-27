@@ -17,7 +17,7 @@ type Props = {
 };
 
 export function RoutePreview({ store, origin, route, mainFloorId, onStart, onBack, onChangeParking }: Props) {
-	const floorChange = route.status === 'ready' ? route.steps.find(s => s.icon === 'up' || s.icon === 'down') : undefined;
+	const via = route.status === 'ready' ? route.steps.find(s => s.via)?.via : undefined;
 
 	return (
 		<section className="flex flex-col gap-4" aria-labelledby="preview-heading">
@@ -64,7 +64,7 @@ export function RoutePreview({ store, origin, route, mainFloorId, onStart, onBac
 							</p>
 							<p className="text-sm text-muted">
 								{route.steps.length} steps
-								{floorChange ? ` · via ${floorChange.text.replace(/^Take /, '')}` : ' · all on this level'}
+								{via ? ` · via ${via}` : ' · all on this level'}
 							</p>
 						</div>
 					</div>

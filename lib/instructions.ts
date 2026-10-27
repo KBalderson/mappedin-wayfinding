@@ -61,6 +61,8 @@ export type Step = {
 	floorId: string;
 	/** The place the step is anchored to, so the map can keep it in view. */
 	landmark?: Landmark;
+	/** Set on the step that takes an escalator or elevator, e.g. "the escalator up to Upper Level". */
+	via?: string;
 };
 
 export type BuildStepsInput = {
@@ -80,8 +82,13 @@ export type BuildStepsInput = {
 const LANDMARK_RADIUS_M = 10;
 /** Prominent landmarks can anchor "continue straight past ..." from further away. */
 const PROMINENT_RADIUS_M = 30;
-/** Turns closer together than this are spoken as one step ("..., then turn left"). */
+/**
+ * An action this close behind the previous one is folded into its step ("..., then turn left",
+ * "Step off on Upper Level and turn left", "... Gap is straight ahead").
+ */
 const COMBINE_TURN_M = 10;
+/** Two turns folded together that reverse the walking heading by at least this much are a U-turn. */
+const U_TURN_MIN_DEG = 135;
 /** Headings are measured over this much path so small kinks in the route graph don't count. */
 const HEADING_WINDOW_M = 15;
 /**
@@ -213,6 +220,20 @@ function isSidestep(a: RawInstruction, b: RawInstruction): boolean {
 	return Math.abs(headingChange(a.headingIn, b.headingOut)) <= SIDESTEP_MAX_DEG;
 }
 
+/** Two turns a few steps apart that leave the walker heading back the way they came. */
+function isUTurn(a: RawInstruction, b: RawInstruction): boolean {
+	if (a.headingIn !== undefined && b.headingOut !== undefined) {
+		return Math.abs(headingChange(a.headingIn, b.headingOut)) >= U_TURN_MIN_DEG;
+	}
+	// Without the path to measure headings, two full turns the same way is the best signal.
+	return a.bearing === b.bearing && (a.bearing === 'Left' || a.bearing === 'Right');
+}
+
+/** Joins a second sentence onto step text, without doubling up "!" or "." at the seam. */
+function thenSentence(text: string, next: string): string {
+	return /[.!?]$/.test(text) ? `${text} ${next}` : `${text}. ${next}`;
+}
+
 /** The SDK calls it a full turn, but the walker's heading barely changes. */
 function isKink(ins: RawInstruction): boolean {
 	if (ins.type !== 'Turn' || (ins.bearing !== 'Left' && ins.bearing !== 'Right')) return false;
@@ -328,11 +349,30 @@ export function buildSteps(input: BuildStepsInput): Step[] {
 				const sidestep = sidestepEnds.has(index);
 				const bearing = sidestep || isKink(ins) ? 'Straight' : (ins.bearing ?? 'Straight');
 				const phrase = TURN_PHRASES[bearing];
-				// Two turns a few steps apart read better as one instruction.
-				if (bearing !== 'Straight' && prevStep && walked < COMBINE_TURN_M && instructions[prevStep.instructionIndex].type === 'Turn') {
-					prevStep.text = `${prevStep.text}, then ${phrase.short}`;
-					prevStep.instructionIndex = index;
-					return;
+				// A turn a few steps after another turn, or right off an escalator, reads better as one
+				// instruction. Merged steps keep the icon of their first action, which is what to do now.
+				const prevAction = prevStep && instructions[prevStep.instructionIndex];
+				if (bearing !== 'Straight' && prevStep && prevAction && walked < COMBINE_TURN_M) {
+					if (prevAction.type === 'Turn') {
+						if (isUTurn(prevAction, ins)) {
+							prevStep.text = `Make a U-turn${prevStep.landmark ? ` at ${prevStep.landmark.name}` : ''}`;
+							prevStep.icon = 'back';
+						} else {
+							prevStep.text = `${prevStep.text}, then ${phrase.short}`;
+						}
+						prevStep.instructionIndex = index;
+						return;
+					}
+					if (prevAction.type === 'ExitConnection') {
+						const anchor = bearing !== 'Back' ? landmarkAt(ins) : undefined;
+						if (anchor) {
+							lastLandmark = anchor.name;
+							prevStep.landmark = anchor;
+						}
+						prevStep.text = `${prevStep.text} and ${phrase.short}${anchor ? ` at ${anchor.name}` : ''}`;
+						prevStep.instructionIndex = index;
+						return;
+					}
 				}
 				// "Continue straight" with no landmark adds nothing; fold its distance into the next step.
 				const landmark =
@@ -358,12 +398,15 @@ export function buildSteps(input: BuildStepsInput): Step[] {
 			case 'TakeConnection': {
 				const dir = ins.direction === 'down' ? 'down' : 'up';
 				const floor = ins.toFloorName ? ` to ${ins.toFloorName}` : '';
-				steps.push({
-					...base,
-					icon: dir,
-					lead: lead(walked),
-					text: `Take ${connectionName(ins.connectionType)} ${dir}${floor}`,
-				});
+				const via = `${connectionName(ins.connectionType)} ${dir}${floor}`;
+				// "Turn right" then "Take the escalator" a few steps later is one instruction.
+				if (prevStep && walked < COMBINE_TURN_M && instructions[prevStep.instructionIndex].type === 'Turn') {
+					prevStep.text = `${prevStep.text}, then take ${via}`;
+					prevStep.via = via;
+					prevStep.instructionIndex = index;
+					return;
+				}
+				steps.push({ ...base, icon: dir, lead: lead(walked), text: `Take ${via}`, via });
 				return;
 			}
 			case 'ExitConnection': {
@@ -382,6 +425,12 @@ export function buildSteps(input: BuildStepsInput): Step[] {
 				const side =
 					prevPoint && destinationPoint && !endsInside ? sideOf(prevPoint, ins.point, destinationPoint) : 'ahead';
 				const where = side === 'ahead' ? 'is straight ahead' : `is on your ${side}`;
+				// Arriving a few steps after the last action: say it on that step instead of a "Right away" card.
+				if (prevStep && prevStep.icon !== 'start' && walked < COMBINE_TURN_M) {
+					prevStep.text = thenSentence(prevStep.text, `${destinationName} ${where}`);
+					prevStep.instructionIndex = index;
+					return;
+				}
 				steps.push({
 					...base,
 					icon: 'arrive',

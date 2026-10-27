@@ -78,7 +78,13 @@ The SDK's raw instructions are just "Turn Right", with distances and no landmark
 - **Landmarks.** Each turn is anchored to the nearest storefront within 10 m, measured to the store's *outline* rather than its center. Large stores have their center far from their front. This gives "Turn left at Sephora". Amenities read naturally ("at the ATM"), parking areas are excluded, and the same landmark isn't used twice in a row.
 - **Sidesteps.** The route graph often jogs sideways, for example where a corridor opens into a court. The SDK reports that as "Turn Right" and then "Turn Left". Headings are measured along the path over about 15 m. When two opposite turns come within 15 m and leave the walker facing the same way, they become one "Continue straight past …" step. Wider jogs, like crossing a food court, keep both turns because the walker really does have to cross over.
 - **Prominent landmarks.** Freestanding kiosks (the Information Desk, Guest Services) can be seen from across a court. A "continue straight" step can name them from up to 30 m away; storefronts need to be within 10 m.
-- **Consolidation.** Turns a few steps apart merge ("Turn right at Adidas, then turn left"). A "continue straight" with nothing to anchor it folds its distance into the next step.
+- **Consolidation.** Any action less than 10 m after the previous one is folded into that step, so a few steps of walking never get a card of their own:
+  - turn after turn: "Turn right at Adidas, then turn left"
+  - turn into an escalator: "Turn right, then take the escalator up to Upper Level"
+  - turn after stepping off: "Step off on Upper Level and turn left at French Connection"
+  - arrival after the last turn: "Turn left at Groovy Shoes. Oak + Fort is straight ahead"
+
+  A merged step keeps the icon of its first action, which is what to do now. Two turns that leave the walker heading back the way they came become "Make a U-turn at …". A "continue straight" with nothing to anchor it folds its distance into the next step.
 - **Distances** are the walk *to* each action ("In 85 m"), rounded to 5 m.
 - **Floor changes.** "Take the escalator up to Upper Level", then "Step off on Upper Level". The SDK reports the wrong floor on its exit instruction, so the app uses the exit point's floor instead.
 - **Arrival** says whether the store is ahead, on the left or on the right. If the route ends inside the storefront, it says "straight ahead".
@@ -109,7 +115,7 @@ lib/
 Tested on the production build (`npm run build && npm start`) in desktop Chrome on macOS, at desktop width and at a 390 × 844 phone-sized viewport.
 
 ### Automated
-- [x] `npm test`: 29 unit tests pass. 21 cover the instruction engine (landmarks, outlines, sidesteps, kinks, merged turns, floor changes, arrival side), 6 cover store search and 2 cover the name fixes
+- [x] `npm test`: 36 unit tests pass. 28 cover the instruction engine (landmarks, outlines, sidesteps, kinks, merged turns and short legs, U-turns, floor changes, arrival side), 6 cover store search and 2 cover the name fixes
 - [x] `npm run lint` and `tsc --noEmit` are clean
 - [x] `npm run build` succeeds
 
@@ -118,9 +124,9 @@ Each route was opened in the app and its steps read through. Every one completed
 
 | From | To | Result |
 |---|---|---|
-| Garage, main level | Oak + Fort, Subway, Torrid (Lower) | 6–8 steps, every turn anchored except two on Torrid |
-| Garage, main level | Fred Perry (Upper) | Escalator up, "Step off on Upper Level", 13 steps |
-| Garage, main level | MAC Cosmetics (Upper) | Router picks the elevator; the preview says "via the elevator" |
+| Garage, main level | Oak + Fort, Subway, Torrid (Lower) | 5–8 steps, every turn anchored except two on Torrid |
+| Garage, main level | Fred Perry (Upper) | 11 steps: "Turn right, then take the escalator up to Upper Level", then "Step off on Upper Level and turn left" |
+| Garage, main level | MAC Cosmetics (Upper) | Router picks the elevator; the preview says "via the elevator"; 6 steps |
 | Garage, Upper Level | Fred Perry (Upper) | Stays upstairs; the preview says "all on this level" |
 | Garage, Upper Level | Oak + Fort (Lower) | Escalator down |
 | Lot A | Oak + Fort (Lower), Fred Perry (Upper) | Starts with "walk toward the mall" |
@@ -156,8 +162,9 @@ Each route was opened in the app and its steps read through. Every one completed
 - **"Nordstorm" (fixed for now).** The venue data misspells Nordstrom. Before the fix, the typo was the first landmark on every route from the main garage, and searching the correct spelling, "nordstrom", found nothing. `NAME_FIXES` in `lib/mall.ts` now corrects the name for the directory, search and directions. The real fix belongs in the customer's map data, and I'd raise it with them. The patch is keyed on the misspelling, so once the data is fixed it simply stops matching; nothing breaks, and saved state and deep links use location IDs, not names. Delete the entry then.
 - **"Shoes" search (fixed).** QA found that "shoes" matched only the 2 stores with "Shoes" in their name and none of the Footwear stores, even though the empty state suggests searching "shoes". `CATEGORY_WORDS` in `lib/mall.ts` now maps everyday words to 11 of the venue's 12 categories ("Specialty" is too mixed to have any), and stores named for the query come first. The word list is hand-written for this venue. A real deployment should build it from the customer's search logs.
 - **Long outdoor legs.** From Lot B, the first step is "Bear right at Funk N Frost" in 265 m. Outdoor lots have no landmarks to anchor turns, so those stretches would need entrance signage or door names.
-- **Unanchored and back-to-back turns.** A few indoor legs have no landmark ("Turn right — In 70 m"). Two lefts in quick succession read as "Turn left at WATCH IT!, then turn left" without saying it's a U-turn.
-- **Arrival phrasing.** When the store is right at the last turn, the step reads "Right away — Oak + Fort is straight ahead".
+- **Unanchored legs.** A few indoor legs have no landmark ("Turn right — In 70 m" on the way to Torrid).
+- **"Turn left at WATCH IT!, then turn left" (open).** On the Torrid route, this step covers a sharp hairpin near the Entrance. The path headings show the two lefts don't reverse direction, so the U-turn rule correctly leaves it alone, but the wording doesn't describe the hairpin well. Fixing it needs the raw instructions for that route, which the dev build exposes.
+- **Short legs (fixed).** QA found "Right away" cards: "Turn right — In 10 m" before the escalator, "Turn left — Right away" after stepping off, and "Right away — Oak + Fort is straight ahead" on arrival. Actions less than 10 m apart are now folded into one step (see [Consolidation](#instructions-people-can-follow)). Garage → Fred Perry went from 13 steps to 11, and garage → MAC Cosmetics from 9 to 6.
 
 ### Before handing it to the customer
 1. **Sweep every route.** Script every origin × store pair (4 × 247) and flag anything that has no route, a leg over 60 m with no landmark, or a doubled turn. This is how Urban Kids and the long legs get found systematically rather than by luck.
