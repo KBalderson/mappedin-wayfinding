@@ -7,7 +7,8 @@ A nod to "Tautai Vasa (Mariner of the Open Ocean)" from Moana: finding the way b
 ## Run it
 
 ```sh
-asdf install            # Node 24 (see .tool-versions)
+asdf plugin add nodejs  # first time only
+asdf install            # Node 24 (see .tool-versions); any Node 24 works too
 npm install
 cp .env.example .env.local
 npm run dev             # http://localhost:3000
