@@ -8,7 +8,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-	title: 'Mall Wayfinding',
+	title: 'Vasa',
 	description: 'Find a store and get step-by-step directions from where you parked.',
 };
 

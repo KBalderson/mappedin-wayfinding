@@ -8,6 +8,7 @@ import { useRoute } from '@/lib/useRoute';
 import { useWayfinding } from '@/lib/useWayfinding';
 import { MapScene, type MapInsets } from './map/MapScene';
 import { DirectionsPanel } from './ui/DirectionsPanel';
+import { VasaLogo } from './ui/icons';
 import { ParkingPicker } from './ui/ParkingPicker';
 import { RoutePreview } from './ui/RoutePreview';
 import { StoreDirectory } from './ui/StoreDirectory';
@@ -90,8 +91,9 @@ export function MallExperience({ mapData }: { mapData: MapData }) {
 			</div>
 
 			<div className="venue-chip">
-				<span className="size-2 rounded-full bg-brand" aria-hidden="true" />
-				{venueName}
+				<VasaLogo className="size-5 text-brand" />
+				Vasa
+				<span className="font-normal text-muted">· {venueName}</span>
 			</div>
 
 			<aside

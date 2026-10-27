@@ -74,6 +74,17 @@ export const WalkIcon = (p: IconProps) => (
 	</Svg>
 );
 
+/** The Vasa mark: an outrigger canoe under a crab-claw sail. Mirrors `app/icon.svg`. */
+export const VasaLogo = (p: IconProps) => (
+	<svg viewBox="0 0 32 32" fill="currentColor" aria-hidden="true" width={24} height={24} {...p}>
+		<path d="M14.5 16.5Q8.5 11 7 3q6 4.5 14.5 1.5-5 5.5-7 12Z" />
+		<path d="M14.5 16v3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+		<path d="M1.5 16.5Q3 18.5 6 19h20q3-.5 4.5-2.5-1.5 6-6.5 6H8q-5 0-6.5-6Z" />
+		<path d="M9 21q0 4.5-2.5 5.6M23 21q0 4.5 2.5 5.6" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" />
+		<path d="M3 27q13-2.25 26 0-13 2.25-26 0Z" />
+	</svg>
+);
+
 /** Rotations for a single "up" arrow; one glyph keeps every turn visually consistent. */
 const ARROW_ROTATION: Partial<Record<StepIconKind, number>> = {
 	straight: 0,

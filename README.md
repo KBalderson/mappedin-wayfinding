@@ -1,6 +1,6 @@
-# Mall Wayfinding
+# Vasa
 
-A mobile-first web app that gets a first-time visitor from where they parked to a specific store. They pick their parking entrance, search for a store and follow step-by-step directions that name real storefronts along the way. It's built with Next.js and [Mappedin JS v6](https://developer.mappedin.com/web-sdk/getting-started).
+A nod to "Tautai Vasa (Mariner of the Open Ocean)" from Moana: finding the way by the landmarks around you. Vasa is a mobile-first web app that gets a first-time visitor from where they parked to a specific store. They pick their parking entrance, search for a store and follow step-by-step directions that name real storefronts along the way. It's built with Next.js and [Mappedin JS v6](https://developer.mappedin.com/web-sdk/getting-started).
 
 **Live demo: [mappedin-wayfinding.vercel.app](https://mappedin-wayfinding.vercel.app)**. It works best on a phone. To see what a QR code at a parking entrance would open, try [/?from=lot-a](https://mappedin-wayfinding.vercel.app/?from=lot-a).
 
